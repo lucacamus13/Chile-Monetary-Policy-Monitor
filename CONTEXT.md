@@ -75,7 +75,7 @@ Responsible for:
 - Executive dashboards
 - KPI monitoring
 - Business-oriented visualization
-- Semantic model built from `processed_data` and `indicators`
+- Semantic model built from `indicators`
 
 ---
 
@@ -85,45 +85,43 @@ The project uses a hybrid storage approach:
 
 ### Primary Storage
 
-- SQLite database (`database.db`)
+- SQLite database (`database.db`) — source of truth
 
 ### Secondary Storage
 
-- CSV files (for Power BI integration)
+- CSV files (for Power BI integration) — regenerated from SQLite on each pipeline run
 
 ### Database Design
 
 #### Table: raw_data
 
-- date
-- variable
-- value
+| Column | Type | Description |
+|--------|------|-------------|
+| date | TEXT | Date of observation (YYYY-MM-DD) |
+| series_code | TEXT | Series identifier (e.g., cpi_chile, oil, latam_fx_index) |
+| value | REAL | Numeric value |
+| updated_at | TEXT | Timestamp of last update |
 
-#### Table: processed_data
+Primary Key: (date, series_code)
 
-- date
-- cpi_chile
-- cpi_usa
-- tpm
-- fed_funds
-- usdclp
-- copper
-- oil
-- gdp_or_imacec
-- unemployment
+The table uses **upsert** logic — new records are inserted, existing records are updated.
 
 #### Table: indicators
 
-- date
-- cpi_yoy
-- cpi_mom
-- real_rate
-- rate_spread
-- usdclp_change
-- copper_change
-- oil_change
-- inflation_gap
-- activity_growth
+| Column | Type | Description |
+|--------|------|-------------|
+| date | TEXT | Date (YYYY-MM-DD) |
+| cpi_yoy | REAL | CPI year-over-year (%) |
+| cpi_mom | REAL | CPI month-over-month (%) |
+| real_rate | REAL | Real interest rate (TPM - CPI YoY) |
+| rate_spread | REAL | Chile-USA rate spread (pp) |
+| usdclp_change | REAL | USD/CLP monthly change (%) |
+| copper_change | REAL | Copper monthly change (%) |
+| oil_change | REAL | Oil monthly change (%) |
+| inflation_gap | REAL | Inflation - target (3%) |
+| activity_growth | REAL | Activity YoY growth (%) |
+| latam_fx_index | REAL | LATAM FX index (base 100 = Jan 2025) |
+| ... | ... | Other raw and derived variables |
 
 The `indicators` table is the main analytical output and the main Power BI fact table.
 
@@ -159,6 +157,11 @@ Use real-world public sources:
 ### Financial Conditions
 
 - USD/CLP exchange rate
+- Brazil/USD (BRL)
+- Mexico/USD (MXN)
+- Peru/USD (PEN)
+- Colombia/USD (COP)
+- LATAM FX Index (average of BRL, MXN, PEN, COP, base 100 = Jan 2025)
 
 ### External Sector
 
@@ -178,6 +181,8 @@ The system must compute:
 - Growth rates (GDP, copper, FX)
 - Rolling averages (optional)
 - Volatility measures (optional)
+- LATAM FX Index (base 100 = Jan 2025, average of BRL, MXN, PEN, COP reindexed)
+- Individual country FX indices (Brazil, Mexico, Peru, Colombia)
 
 ---
 
@@ -186,21 +191,56 @@ The system must compute:
 The pipeline consists of:
 
 1. `download_data.py`
-   - Fetch data from APIs
-   - Store raw data in CSV and SQLite
+   - Fetch data from APIs (FRED, BCCh)
+   - Store raw data in SQLite with **upsert** logic
+   - Regenerate CSV from SQLite after each run
 
-2. `clean_data.py`
-   - Clean and merge datasets
-   - Handle missing values
-   - Store `processed_data` in CSV and SQLite
-
-3. `indicators.py`
+2. `indicators.py`
+   - Pivot raw data to wide format
    - Compute analytical indicators
    - Store `indicators` in CSV and SQLite
 
-4. Outputs available in:
-   - SQLite database
-   - CSV files
+### Download Modes
+
+`download_data.py` supports two modes:
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| Full | `--mode full` | Downloads complete history from FULL_HISTORY_START (2015-01-01). Use for new series or reprocess. |
+| Update | `--mode update` (default) | Incremental download since last date in DB. Auto-detects if series doesn't exist and runs full download. |
+
+Additional options:
+- `--variable [code]`: Download specific series (only with `--mode full`)
+- `--freq [daily|monthly|quarterly]`: Filter by frequency (only with `--mode update`)
+
+### Examples
+
+```bash
+# First time: download complete history for all series
+py scripts/download_data.py --mode full
+
+# Add new series: download complete history for one series
+py scripts/download_data.py --mode full --variable cpi_chile
+
+# Monthly update: download only new data since last run
+py scripts/download_data.py --mode update
+
+# Update only monthly series
+py scripts/download_data.py --mode update --freq monthly
+```
+
+### Upsert Logic
+
+The system uses **upsert** (INSERT OR UPDATE) to prevent data loss:
+
+- Never overwrites existing data from other series
+- If record exists (date, series_code) → updates value and updated_at
+- If record doesn't exist → inserts new record
+- Only overwrites data for the specific (date, series_code) being updated
+
+Outputs available in:
+- SQLite database (`database.db`)
+- CSV files (regenerated from SQLite)
 
 ---
 
@@ -234,7 +274,6 @@ Pages:
 
 Power BI model:
 - Main fact table: `indicators`
-- Support table: `processed_data`
 - Dimension table: `dim_date`
 
 ### 10.3 Analytical Insights (Optional but Recommended)
@@ -289,7 +328,41 @@ The BI layer should:
 
 ---
 
-## 13. Design Principles
+## 13. FX Index Methodology
+
+### LATAM FX Index
+
+The LATAM FX Index replicates the methodology from the IPoM (Informe de Política Monetaria):
+
+1. Each currency series is reindexed to base 100 = January 2025
+2. The index is calculated as: `(current_value / base_value) * 100`
+3. Values > 100 indicate depreciation vs USD since January 2025
+4. Values < 100 indicate appreciation vs USD since January 2025
+5. The LATAM FX Index is the simple average of: Brazil (BRL), Mexico (MXN), Peru (PEN), Colombia (COP)
+
+### USD Dollar Index
+
+The USA Dollar Index (`usa_dollar_reindex`) is inverted from FRED DTWEXBGS to match IPoM methodology:
+- IPoM uses: Higher index = USD depreciation
+- FRED DTWEXBGS: Higher index = USD appreciation
+- Solution: Inverted the series (`base_value / current_value * 100`) to align with IPoM
+
+### Reindexed Series in indicators.csv
+
+| Column | Description | Base |
+|--------|-------------|------|
+| `latam_fx_index` | Average of LATAM currencies | 100 = Jan 2025 |
+| `bra_usd_index` | Brazil FX Index | 100 = Jan 2025 |
+| `mex_usd_index` | Mexico FX Index | 100 = Jan 2025 |
+| `per_usd_index` | Peru FX Index | 100 = Jan 2025 |
+| `col_usd_index` | Colombia FX Index | 100 = Jan 2025 |
+| `usdclp_index` | Chile FX Index | 100 = Jan 2025 |
+| `usa_dollar_reindex` | USA FX Index (inverted) | 100 = Jan 2025 |
+| `euro_usd_index` | Eurozone FX Index | 100 = Jan 2025 |
+
+---
+
+## 15. Design Principles
 
 The project must:
 
@@ -301,7 +374,7 @@ The project must:
 
 ---
 
-## 14. End Goal
+## 16. End Goal
 
 The final product should demonstrate the ability to:
 

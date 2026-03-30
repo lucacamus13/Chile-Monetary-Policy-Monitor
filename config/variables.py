@@ -100,16 +100,42 @@ SERIES_CATALOG = [
     ),
     SeriesConfig(
         code="usdclp",
-        display_name="USD/CLP Exchange Rate",
-        source="FRED",
-        source_series_id="CCUSMA02CLM618N",
+        display_name="Tipo de cambio Chile",
+        source="BCCH",
+        source_series_id="F073.TCO.PRE.Z.D",
         frequency="monthly",
         unit="clp_per_usd",
         category="financial_conditions",
         country="Chile",
         processed_column="usdclp",
         priority=1,
-        notes="Tracks exchange-rate pass-through and external pressure.",
+        notes="Tipo de cambio peso chileno por dolar estadounidense.",
+    ),
+    SeriesConfig(
+        code="usa_dollar_index",
+        display_name="Tipo de cambio multilateral EEUU",
+        source="FRED",
+        source_series_id="DTWEXBGS",
+        frequency="monthly",
+        unit="index",
+        category="financial_conditions",
+        country="United States",
+        processed_column="usa_dollar_index",
+        priority=2,
+        notes="Indice dolar multilateral (DXY) frente a principales monedas.",
+    ),
+    SeriesConfig(
+        code="euro_usd",
+        display_name="Tipo de cambio Eurozona",
+        source="BCCH",
+        source_series_id="F072.EUR.USD.N.O.D",
+        frequency="monthly",
+        unit="eur_per_usd",
+        category="financial_conditions",
+        country="Eurozone",
+        processed_column="euro_usd",
+        priority=2,
+        notes="Euro por dolar estadounidense.",
     ),
     SeriesConfig(
         code="copper",
@@ -128,7 +154,7 @@ SERIES_CATALOG = [
         code="oil",
         display_name="Oil Price",
         source="FRED",
-        source_series_id="MCOILWTICO",
+        source_series_id="DCOILWTICO",
         frequency="monthly",
         unit="usd_per_barrel",
         category="external_sector",
@@ -137,16 +163,71 @@ SERIES_CATALOG = [
         priority=1,
         notes="Relevant for imported inflation and global conditions.",
     ),
+    SeriesConfig(
+        code="bra_usd",
+        display_name="Brazil/USD Exchange Rate",
+        source="BCCH",
+        source_series_id="F072.BRL.USD.N.O.D",
+        frequency="monthly",
+        unit="brl_per_usd",
+        category="financial_conditions",
+        country="Brazil",
+        processed_column="bra_usd",
+        priority=2,
+        notes="Brazilian real per USD - LATAM comparator.",
+    ),
+    SeriesConfig(
+        code="mex_usd",
+        display_name="Mexico/USD Exchange Rate",
+        source="BCCH",
+        source_series_id="F072.MXN.USD.N.O.D",
+        frequency="monthly",
+        unit="mxn_per_usd",
+        category="financial_conditions",
+        country="Mexico",
+        processed_column="mex_usd",
+        priority=2,
+        notes="Mexican peso per USD - LATAM comparator.",
+    ),
+    SeriesConfig(
+        code="per_usd",
+        display_name="Peru/USD Exchange Rate",
+        source="BCCH",
+        source_series_id="F072.PEN.USD.N.O.D",
+        frequency="monthly",
+        unit="pen_per_usd",
+        category="financial_conditions",
+        country="Peru",
+        processed_column="per_usd",
+        priority=2,
+        notes="Peruvian sol per USD - LATAM comparator.",
+    ),
+    SeriesConfig(
+        code="col_usd",
+        display_name="Colombia/USD Exchange Rate",
+        source="BCCH",
+        source_series_id="F072.COP.USD.N.O.D",
+        frequency="monthly",
+        unit="cop_per_usd",
+        category="financial_conditions",
+        country="Colombia",
+        processed_column="col_usd",
+        priority=2,
+        notes="Colombian peso per USD - LATAM comparator.",
+    ),
 ]
 
 
 SERIES_LOOKUP = {series.code: series for series in SERIES_CATALOG}
 PROCESSED_COLUMN_LOOKUP = {series.code: series.processed_column for series in SERIES_CATALOG}
+
+LATAM_FX_CODES = ["usdclp", "bra_usd", "mex_usd", "per_usd", "col_usd", "euro_usd"]
+LATAM_BASE_DATE = "2025-01-01"
 FRED_SERIES = [series for series in SERIES_CATALOG if series.source == "FRED"]
 BCCH_SERIES = [series for series in SERIES_CATALOG if series.source == "BCCH"]
 TARGET_INFLATION = 3.0
+FULL_HISTORY_START = "2015-01-01"
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATABASE_PATH = BASE_DIR / "database.db"
 RAW_CSV_PATH = BASE_DIR / "data" / "raw" / "macro_data.csv"
-PROCESSED_CSV_PATH = BASE_DIR / "data" / "processed" / "processed_data.csv"
 INDICATORS_CSV_PATH = BASE_DIR / "data" / "processed" / "indicators.csv"
