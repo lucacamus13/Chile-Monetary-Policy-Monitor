@@ -57,7 +57,10 @@ DISPLAY_NAMES = {
 @st.cache_data
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     indicators = pd.read_csv(INDICATORS_CSV_PATH, parse_dates=['date'])
-    oil_daily = pd.read_csv(OIL_DAILY_CSV_PATH, parse_dates=['date'])
+    if OIL_DAILY_CSV_PATH.exists():
+        oil_daily = pd.read_csv(OIL_DAILY_CSV_PATH, parse_dates=['date'])
+    else:
+        oil_daily = pd.DataFrame(columns=['date', 'oil_daily'])
     return indicators.sort_values('date').copy(), oil_daily.sort_values('date').copy()
 
 
